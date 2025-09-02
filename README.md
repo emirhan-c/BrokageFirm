@@ -32,8 +32,11 @@ This project is a simple brokerage firm backend application built with Spring Bo
 ### Passwords
 - Customer passwords are stored in the `customer` table (see `data.sql`).
 - When logging in or making a request, you must use the plain (unhashed) password as stored in the table.
-- For customers, **username and password must be entered in Postman using Basic Auth** (Authorization tab → Type: Basic Auth).
-- For any operation, the `customerId` in the request **must match** the `customerId` of the authenticated user (the one whose username/password you used to log in).
+- For customers, there are **two authentication methods** to access endpoints:
+  1. **Basic Auth:** Enter your username and password in Postman using Basic Auth (Authorization tab → Type: Basic Auth).
+  2. **JWT (Bearer Token):** First, POST to `/login` with your username and password to obtain a JWT token, then use the token in the `Authorization: Bearer <token>` header for subsequent requests.
+- You can use either method; both are supported and optional.
+- For any operation, the `customerId` in the request **must match** the `customerId` of the authenticated user (the one whose username/password or token you used to log in).
 - If you try to perform an operation for another customer, you will get an authorization error.
 
 #### Example:
@@ -117,18 +120,26 @@ Sample data is loaded from `src/main/resources/data.sql` at startup. You can mod
   - Password: (see data.sql, e.g. `12345`)
 
 #### For Customers:
-1. First, POST to `/login` with JSON body:
-   ```json
-   {
-     "username": "ahmet",
-     "password": "12345"
-   }
-   ```
-   The response will contain a JWT token.
-2. For all other requests, set the `Authorization` header to `Bearer <token>`.
+   
+Customers can access endpoints using either of the following authentication methods:
 
-#### For Admin:
-- Use Basic Auth in Postman for all endpoints.
+1. **Basic Auth:**
+   - In Postman, select the Authorization tab, choose Basic Auth, and enter your username and password as shown in the customer examples above.
+   - You can directly access all endpoints with Basic Auth.
+
+2. **JWT (Bearer Token):**
+   - First, POST to `/login` with JSON body:
+     ```json
+     {
+       "username": "ahmet",
+       "password": "12345"
+     }
+     ```
+     The response will contain a JWT token.
+   - For all other requests, set the `Authorization` header to `Bearer <token>`.
+
+Both methods are supported and optional; you may use whichever is more convenient for you.
+
 
 ### Common Endpoints
 
