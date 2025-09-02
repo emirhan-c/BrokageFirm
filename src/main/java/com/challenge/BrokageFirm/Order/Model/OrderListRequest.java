@@ -7,8 +7,7 @@ import java.time.LocalDate;
 
 public class OrderListRequest {
     
-    @NotBlank(message = "Customer ID is required")
-    @Pattern(regexp = "^\\d+$", message = "Customer ID must contain only numbers")
+    @NotNull(message = "Customer ID is required")
     private Long customerId;
     
     @NotNull(message = "Start date is required")
@@ -16,18 +15,13 @@ public class OrderListRequest {
     
     @NotNull(message = "End date is required")
     private LocalDate endDate;
-    
-    // Default constructor
-    public OrderListRequest() {}
-    
-    // Constructor with all fields
+
     public OrderListRequest(Long customerId, LocalDate startDate, LocalDate endDate) {
         this.customerId = customerId;
         this.startDate = startDate;
         this.endDate = endDate;
     }
-    
-    // Getters and Setters
+
     public Long getCustomerId() {
         return customerId;
     }

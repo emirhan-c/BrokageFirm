@@ -149,5 +149,35 @@ class OrderServiceTest {
         assertEquals(110.0, asset.getUsableSize());
         assertEquals(9900.0, tryAsset.getUsableSize());
     }
-}
 
+    @Test
+    void testMatchOrderSellDeletesAssetWhenAllSold() {
+        order.setOrderSide(OrderSide.SELL);
+        order.setSize(100.0);
+        asset.setSize(100.0);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(assetRepository.findByCustomerIdAndAssetName(123L, "TRY")).thenReturn(List.of(tryAsset));
+        when(assetRepository.findByCustomerIdAndAssetName(123L, "AAPL")).thenReturn(List.of(asset));
+
+        orderService.matchOrder(1L);
+        assertEquals(OrderStatus.MATCHED, order.getStatus());
+        verify(assetRepository).delete(asset);
+        verify(assetRepository, never()).save(asset);
+    }
+
+    @Test
+    void testMatchOrderSellDoesNotDeleteAssetWhenPartialSold() {
+        order.setOrderSide(OrderSide.SELL);
+        order.setSize(40.0);
+        asset.setSize(100.0);
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        when(assetRepository.findByCustomerIdAndAssetName(123L, "TRY")).thenReturn(List.of(tryAsset));
+        when(assetRepository.findByCustomerIdAndAssetName(123L, "AAPL")).thenReturn(List.of(asset));
+
+        orderService.matchOrder(1L);
+        assertEquals(OrderStatus.MATCHED, order.getStatus());
+        assertEquals(60.0, asset.getSize());
+        verify(assetRepository, never()).delete(asset);
+        verify(assetRepository).save(asset);
+    }
+}

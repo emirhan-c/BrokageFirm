@@ -28,27 +28,19 @@ public class OrderController {
 
     @GetMapping("/list")
     public List<Order> listOrders(@Valid @RequestBody OrderListRequest request) {
-        List<Order> orders = orderService.list(request.getCustomerId(), request.getStartDate(), request.getEndDate());
-        return orders;
+        return orderService.list(request.getCustomerId(), request.getStartDate(), request.getEndDate());
     }
 
     @DeleteMapping("/delete/{orderId}")
     public String deleteOrder(@PathVariable("orderId") Long orderId) {
-        try {
-            orderService.deleteOrder(orderId);
-            return "Order with ID " + orderId + " has been successfully deleted.";
-        } catch (RuntimeException e) {
-            return "Order's status is not PENDING";
-        }
+
+        orderService.deleteOrder(orderId);
+        return "Order with ID " + orderId + " has been successfully deleted.";
     }
 
-    @PutMapping("/match/{orderId}")
+    @PostMapping("/match/{orderId}")
     public String matchOrder(@PathVariable("orderId") Long orderId) {
-        try {
-            orderService.matchOrder(orderId);
-            return "Order with ID " + orderId + " has been matched successfully.";
-        } catch (RuntimeException e) {
-            return e.getMessage();
-        }
+        orderService.matchOrder(orderId);
+        return "Order with ID " + orderId + " has been matched successfully.";
     }
 }

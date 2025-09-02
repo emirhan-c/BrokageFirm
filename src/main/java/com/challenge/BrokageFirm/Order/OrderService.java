@@ -32,10 +32,10 @@ public class OrderService {
         Double price = request.getPrice();
         Double size = request.getSize();
 
-        Asset tryAsset =  assetRepository.findByCustomerIdAndAssetName(customerId, "TRY").get(0);
-        Optional<Asset> targetAsset = null;
+        Asset tryAsset =  assetRepository.findByCustomerIdAndAssetName(customerId, "TRY").getFirst();
+        Optional<Asset> targetAsset = Optional.empty();
         if (!assetName.equalsIgnoreCase("TRY")) {
-             targetAsset = assetRepository.findByCustomerIdAndAssetName(customerId, assetName).stream().findFirst();
+            targetAsset = assetRepository.findByCustomerIdAndAssetName(customerId, assetName).stream().findFirst();
         }
         if (orderSide.equals(OrderSide.BUY)) {
             double totalCost = size * price;
@@ -43,7 +43,6 @@ public class OrderService {
                 throw new RuntimeException("Insufficient TRY balance");
             }
             tryAsset.setUsableSize(tryAsset.getUsableSize() - totalCost);
-            tryAsset.setSize(tryAsset.getSize() - totalCost);
             assetRepository.save(tryAsset);
         }
         else  {
@@ -52,11 +51,8 @@ public class OrderService {
                 throw new RuntimeException("Insufficient asset amount to sell");
             }
             asset.setUsableSize(asset.getUsableSize() - size);
-            asset.setSize(asset.getSize() - size);
             assetRepository.save(asset);
-            // Satışta TRY usableSize artırılır
             tryAsset.setUsableSize(tryAsset.getUsableSize() + (size * price));
-            tryAsset.setSize(tryAsset.getSize() + (size * price));
             assetRepository.save(tryAsset);
         }
 
@@ -83,25 +79,25 @@ public class OrderService {
     public void deleteOrder(Long orderId) {
         Order order = findOrderById(orderId);
         if (order.getStatus() != OrderStatus.PENDING) {
-            throw new RuntimeException("Cannot delete order with status: " + order.getStatus() + ". Only PENDING orders can be deleted.");
+          throw new RuntimeException ("Cannot delete order with status: " + order.getStatus() + ". Only PENDING orders can be deleted.");
         }
-        Asset tryAsset = assetRepository.findByCustomerIdAndAssetName(order.getCustomerId(), "TRY").get(0);
-        Asset asset = assetRepository.findByCustomerIdAndAssetName(order.getCustomerId(), order.getAssetName()).get(0);
+        Asset tryAsset = assetRepository.findByCustomerIdAndAssetName(order.getCustomerId(), "TRY").getFirst();
+        List<Asset> assetList = assetRepository.findByCustomerIdAndAssetName(order.getCustomerId(), order.getAssetName());
         if (order.getOrderSide() == OrderSide.BUY) {
-            // BUY iptal: asset azaltılır, TRY iade edilir
-            asset.setUsableSize(asset.getUsableSize() - order.getSize());
-            asset.setSize(asset.getSize() - order.getSize());
+            if (!assetList.isEmpty()) {
+                Asset asset = assetList.getFirst();
+                asset.setUsableSize(asset.getUsableSize() - order.getSize());
+                assetRepository.save(asset);
+            }
             tryAsset.setUsableSize(tryAsset.getUsableSize() + order.getSize() * order.getPrice().doubleValue());
-            tryAsset.setSize(tryAsset.getSize() + order.getSize() * order.getPrice().doubleValue());
-            assetRepository.save(asset);
             assetRepository.save(tryAsset);
         } else if (order.getOrderSide() == OrderSide.SELL) {
-            // SELL iptal: asset iade edilir, TRY geri alınır
-            asset.setUsableSize(asset.getUsableSize() + order.getSize());
-            asset.setSize(asset.getSize() + order.getSize());
+            if (!assetList.isEmpty()) {
+                Asset asset = assetList.getFirst();
+                asset.setUsableSize(asset.getUsableSize() + order.getSize());
+                assetRepository.save(asset);
+            }
             tryAsset.setUsableSize(tryAsset.getUsableSize() - order.getSize() * order.getPrice().doubleValue());
-            tryAsset.setSize(tryAsset.getSize() - order.getSize() * order.getPrice().doubleValue());
-            assetRepository.save(asset);
             assetRepository.save(tryAsset);
         }
         order.setStatus(OrderStatus.CANCELLED);
@@ -113,23 +109,46 @@ public class OrderService {
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new RuntimeException("Only PENDING orders can be matched.");
         }
-        Asset tryAsset = assetRepository.findByCustomerIdAndAssetName(order.getCustomerId(), "TRY").get(0);
-        Asset asset = assetRepository.findByCustomerIdAndAssetName(order.getCustomerId(), order.getAssetName()).get(0);
+        Asset tryAsset = assetRepository.findByCustomerIdAndAssetName(order.getCustomerId(), "TRY").getFirst();
         if (order.getOrderSide() == OrderSide.BUY) {
-            // BUY match: asset artırılır
-            asset.setUsableSize(asset.getUsableSize() + order.getSize());
-            asset.setSize(asset.getSize() + order.getSize());
-            assetRepository.save(asset);
-        } else if (order.getOrderSide() == OrderSide.SELL) {
-            // SELL match: asset azaltılır, TRY artırılır
-            asset.setUsableSize(asset.getUsableSize() - order.getSize());
-            asset.setSize(asset.getSize() - order.getSize());
-            tryAsset.setUsableSize(tryAsset.getUsableSize() + order.getSize() * order.getPrice().doubleValue());
-            tryAsset.setSize(tryAsset.getSize() + order.getSize() * order.getPrice().doubleValue());
-            assetRepository.save(asset);
+
+            tryAsset.setSize(tryAsset.getSize() - order.getSize() * order.getPrice().doubleValue());
             assetRepository.save(tryAsset);
+
+            List<Asset> assetList = assetRepository.findByCustomerIdAndAssetName(order.getCustomerId(), order.getAssetName());
+            if (assetList.isEmpty()) {
+                createNewAsset(order.getCustomerId(), order.getAssetName(), order.getSize());
+            } else {
+                Asset asset = assetList.getFirst();
+                asset.setSize(asset.getSize() + order.getSize());
+                assetRepository.save(asset);
+            }
+        } else if (order.getOrderSide() == OrderSide.SELL) {
+
+            tryAsset.setSize(tryAsset.getSize() + order.getSize() * order.getPrice().doubleValue());
+            assetRepository.save(tryAsset);
+
+            List<Asset> assetList = assetRepository.findByCustomerIdAndAssetName(order.getCustomerId(), order.getAssetName());
+            if (!assetList.isEmpty()) {
+                Asset asset = assetList.getFirst();
+                if (asset.getSize().equals(order.getSize())) {
+                    assetRepository.delete(asset);
+                    return;
+                }
+                asset.setSize(asset.getSize() - order.getSize());
+                assetRepository.save(asset);
+            }
         }
         order.setStatus(OrderStatus.MATCHED);
         orderRepository.save(order);
+    }
+
+    private void createNewAsset(Long customerId, String assetName, Double size) {
+        Asset newAsset = new Asset();
+        newAsset.setCustomerId(customerId);
+        newAsset.setAssetName(assetName);
+        newAsset.setSize(size);
+        newAsset.setUsableSize(size);
+        assetRepository.save(newAsset);
     }
 }

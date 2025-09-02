@@ -12,7 +12,6 @@ public class OrderCreateRequest {
     private Double size;
     private Double price;
 
-    // Getters and Setters
     public Long getCustomerId() {
         return customerId;
     }

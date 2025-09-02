@@ -50,14 +50,11 @@ public class Order {
     @PastOrPresent(message = "Create date cannot be in the future")
     @Column(name = "create_date", nullable = false)
     private LocalDate createDate;
-
-
-    // Default constructor
+    
     public Order() {
         this.createDate = LocalDate.now();
     }
 
-    // Constructor with all fields
     public Order(Long customerId, String assetName, OrderSide orderSide, Double size, BigDecimal price, OrderStatus status) {
         this.customerId = customerId;
         this.assetName = assetName;
