@@ -8,14 +8,73 @@ This project is a simple brokerage firm backend application built with Spring Bo
 - Asset balance and order status tracking
 - H2 in-memory database for easy testing
 - Ready for Postman API testing
+- **Role-based authentication and authorization**
 
 ## Technologies Used
 - Java 17+
 - Spring Boot
 - Spring Data JPA
 - H2 Database
-- Spring Security (Basic Auth, see below)
+- Spring Security (JWT & Basic Auth)
 - Postman (for API testing)
+
+## Authentication & Authorization
+
+### User Types
+- **Admin:**
+  - Can access and manipulate all customers' data.
+  - Can perform all operations, including matching orders.
+- **Customer:**
+  - Can only access and manipulate their own data.
+  - Can only perform actions (list, create, delete orders, etc.) for their own customerId.
+  - **Cannot perform match operations.**
+
+### Passwords
+- Customer passwords are stored in the `customer` table (see `data.sql`).
+- When logging in or making a request, you must use the plain (unhashed) password as stored in the table.
+- For customers, **username and password must be entered in Postman using Basic Auth** (Authorization tab → Type: Basic Auth).
+- For any operation, the `customerId` in the request **must match** the `customerId` of the authenticated user (the one whose username/password you used to log in).
+- If you try to perform an operation for another customer, you will get an authorization error.
+
+#### Example:
+- If you log in with username: `ahmet` and password: `12345` (using Basic Auth in Postman):
+
+  - The following request will be **successful**:
+    - **POST** `http://localhost:8080/orders/create`
+    - **Body:**
+      ```json
+      {
+        "customerId": "12345",
+        "assetName": "AAPL",
+        "orderSide": "BUY",
+        "size": 10,
+        "price": 500
+      }
+      ```
+
+  - The following request will be **unsuccessful** (authorization error):
+    - **POST** `http://localhost:8080/orders/create`
+    - **Body:**
+      ```json
+      {
+        "customerId": "67890",
+        "assetName": "AAPL",
+        "orderSide": "BUY",
+        "size": 10,
+        "price": 500
+      }
+      ```
+
+  - Because you are logged in as `ahmet` (customerId `12345`), you cannot create an order for another customer (`67890`).
+
+### Admin User
+- Username: `admin`
+- Password: `admin123`
+- The admin can access and manipulate all data, and is the only user who can perform the match operation.
+
+### Customer Example
+- Username: `ahmet`, Password: `12345`, CustomerId: `12345`
+- Username: `ayse`, Password: `67890`, CustomerId: `67890`
 
 ## Getting Started
 
@@ -49,11 +108,27 @@ Sample data is loaded from `src/main/resources/data.sql` at startup. You can mod
 ## API Usage with Postman
 
 ### Authentication
-- **Type:** Basic Auth
-- **Username:** `admin`
-- **Password:** `admin123`
+- **Type:** Basic Auth (for admin) or JWT (for customer, via /login endpoint)
+- **Admin:**
+  - Username: `admin`
+  - Password: `admin123`
+- **Customer:**
+  - Username: (see data.sql, e.g. `ahmet`)
+  - Password: (see data.sql, e.g. `12345`)
 
-> **Note:** All endpoints require authentication. Only the admin user is available by default. (If you add customer auth, use the relevant username/password.)
+#### For Customers:
+1. First, POST to `/login` with JSON body:
+   ```json
+   {
+     "username": "ahmet",
+     "password": "12345"
+   }
+   ```
+   The response will contain a JWT token.
+2. For all other requests, set the `Authorization` header to `Bearer <token>`.
+
+#### For Admin:
+- Use Basic Auth in Postman for all endpoints.
 
 ### Common Endpoints
 
@@ -68,6 +143,7 @@ Sample data is loaded from `src/main/resources/data.sql` at startup. You can mod
   "endDate": "2024-12-31"
 }
 ```
+- **Note:** Only the customer with customerId `12345` (and admin) can access this data.
 
 #### 2. Create Order
 - **Method:** `POST`
@@ -82,38 +158,39 @@ Sample data is loaded from `src/main/resources/data.sql` at startup. You can mod
   "price": 150.0
 }
 ```
+- **Note:** Only the customer with customerId `12345` (and admin) can create an order for this customer.
 
 #### 3. Delete Order
 - **Method:** `DELETE`
 - **URL:** `http://localhost:8080/orders/delete/{orderId}`
 - Replace `{orderId}` with the actual order ID (e.g. `5`).
+- **Note:** Only the owner customer (or admin) can delete the order.
 
 #### 4. Match Order
 - **Method:** `PUT`
 - **URL:** `http://localhost:8080/orders/match/{orderId}`
 - Replace `{orderId}` with the actual order ID.
+- **Note:** Only the admin user can perform this operation.
 
 #### 5. List Assets by Customer
 - **Method:** `GET`
 - **URL:** `http://localhost:8080/assets/list/{customerId}`
 - Replace `{customerId}` with the actual customer ID (e.g. `12345`).
+- **Note:** Only the owner customer (or admin) can access this data.
 
 ## Postman Auth Settings
-- Go to the Authorization tab in Postman.
-- Select `Basic Auth`.
-- Enter the username and password (see above).
-- For each request, make sure the Authorization header is set.
+- For admin: Use the Authorization tab, select `Basic Auth`, and enter the admin credentials.
+- For customers: First obtain a JWT from `/login`, then set the `Authorization` header to `Bearer <token>` for all requests.
 
 ## Notes
 - All endpoints require authentication.
 - Only the admin user can access all data and perform all operations by default.
-- If you add customer authentication, each customer will only be able to access their own data.
+- Customers can only access and manipulate their own data, and cannot perform match operations.
 - The H2 database is in-memory and resets on each application restart.
 
 ## Example Postman Collection
-You can create a Postman collection with the above endpoints and set the Basic Auth credentials at the collection level for convenience.
+You can create a Postman collection with the above endpoints and set the Basic Auth or Bearer Token at the collection level for convenience.
 
 ---
 
 For any issues, please check the code comments or contact the project maintainer.
-
