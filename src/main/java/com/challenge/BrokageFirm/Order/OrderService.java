@@ -2,10 +2,14 @@ package com.challenge.BrokageFirm.Order;
 
 import com.challenge.BrokageFirm.Asset.AssetRepository;
 import com.challenge.BrokageFirm.Asset.Entity.Asset;
+import com.challenge.BrokageFirm.Customer.CustomerRepository;
+import com.challenge.BrokageFirm.Customer.Entity.Customer;
 import com.challenge.BrokageFirm.Order.Entity.Order;
 import com.challenge.BrokageFirm.Order.Enum.OrderSide;
 import com.challenge.BrokageFirm.Order.Enum.OrderStatus;
 import com.challenge.BrokageFirm.Order.Model.OrderCreateRequest;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -18,14 +22,16 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final AssetRepository assetRepository;
+    private final CustomerRepository customerRepository;
 
-    public OrderService(OrderRepository orderRepository, AssetRepository assetRepository) {
+    public OrderService(OrderRepository orderRepository, AssetRepository assetRepository, CustomerRepository customerRepository) {
         this.orderRepository = orderRepository;
         this.assetRepository = assetRepository;
+        this.customerRepository = customerRepository;
     }
 
     public Order save(OrderCreateRequest request) {
-
+        checkAuth(request.getCustomerId());
         Long customerId = request.getCustomerId();
         String assetName = request.getAssetName();
         OrderSide orderSide = request.getOrderSide();
@@ -68,6 +74,7 @@ public class OrderService {
     }
     
     public List<Order> list(Long customerId, LocalDate startDate, LocalDate endDate) {
+        checkAuth(customerId);
         return orderRepository.findByCustomerIdAndCreateDateBetween(customerId, startDate, endDate);
     }
     
@@ -78,6 +85,7 @@ public class OrderService {
     
     public void deleteOrder(Long orderId) {
         Order order = findOrderById(orderId);
+        checkAuth(order.getCustomerId());
         if (order.getStatus() != OrderStatus.PENDING) {
           throw new RuntimeException ("Cannot delete order with status: " + order.getStatus() + ". Only PENDING orders can be deleted.");
         }
@@ -106,6 +114,11 @@ public class OrderService {
 
     public void matchOrder(Long orderId) {
         Order order = findOrderById(orderId);
+        boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if(!isAdmin){
+            throw new RuntimeException("Only admins can match orders.");
+        }
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new RuntimeException("Only PENDING orders can be matched.");
         }
@@ -150,5 +163,19 @@ public class OrderService {
         newAsset.setSize(size);
         newAsset.setUsableSize(size);
         assetRepository.save(newAsset);
+    }
+
+    private void checkAuth(Long customerId){
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String username = authentication.getName();
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (!isAdmin) {
+            Customer customer = customerRepository.findByUsername(username)
+                    .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("User not found."));
+            if (!customerId.equals(customer.getCustomerId())) {
+                throw new org.springframework.security.access.AccessDeniedException("You are not authorized to perform this action for another customer.");
+            }
+        }
     }
 }
